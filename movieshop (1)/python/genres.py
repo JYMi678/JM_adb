@@ -8,7 +8,7 @@
 
 # COMMAND ----------
 
-# MAGIC  %run "./includes/utilities"
+# MAGIC  %run "./includes/common_functions"
 
 # COMMAND ----------
 
@@ -77,7 +77,7 @@ silver_genres.count()
 
 # COMMAND ----------
 
-silver_genres = silver_genres.drop_duplicates()
+silver_genres = silver_genres.dropDuplicates()
 
 # COMMAND ----------
 
@@ -100,7 +100,7 @@ bronzeToSilverWriter.save(f"{silver_folder_path}/genres")
 
 #
 delta_genres = read_batch_delta(f"{silver_folder_path}/genres")
-delta_genres = delta_genres.drop_duplicates().na.drop()
+delta_genres = delta_genres.dropDuplicates().na.drop()
 display(delta_genres)
 
 # COMMAND ----------
@@ -123,20 +123,22 @@ location "{silver_folder_path}/genres"
 
 # COMMAND ----------
 
-from delta.tables import DeltaTable
-
-bronzeTable = DeltaTable.forPath(spark, f"{bronze_folder_path}/genres")
-silverAugmented = (
-    silver_genres_clean
-    .withColumn("status", lit("loaded"))
-)
-
-update_match = "g_bronze.Movies = clean.Movies"
-update = {"status": "clean.status"}
-
-(
-  bronzeTable.alias("g_bronze")
-  .merge(silverAugmented.alias("clean"), update_match)
-  .whenMatchedUpdate(set=update)
-  .execute()
-)
+# MAGIC %md
+# MAGIC #no need
+# MAGIC from delta.tables import DeltaTable
+# MAGIC 
+# MAGIC bronzeTable = DeltaTable.forPath(spark, f"{bronze_folder_path}/genres")
+# MAGIC silverAugmented = (
+# MAGIC     silver_genres_clean
+# MAGIC     .withColumn("status", lit("loaded"))
+# MAGIC )
+# MAGIC 
+# MAGIC update_match = "g_bronze.Movies = clean.Movies"
+# MAGIC update = {"status": "clean.status"}
+# MAGIC 
+# MAGIC (
+# MAGIC   bronzeTable.alias("g_bronze")
+# MAGIC   .merge(silverAugmented.alias("clean"), update_match)
+# MAGIC   .whenMatchedUpdate(set=update)
+# MAGIC   .execute()
+# MAGIC )

@@ -52,7 +52,17 @@ def transform_raw(raw: DataFrame) -> DataFrame:
 # COMMAND ----------
 
 def read_movies_bronze() -> DataFrame:
-    return spark.read.load(f"{bronze_folder_path}/").filter("status = 'new' ").select("Movies.Id", "Movies.Title", "Movies.Overview", "Movies.Budget", "Movies.RunTime", "Movies")
+    return spark.read.load(f"{bronze_folder_path}/").filter("status = 'new' ")
+
+# COMMAND ----------
+
+def read_genres_bronze() -> DataFrame:
+    return spark.read.load(f"{bronze_folder_path}/genres").filter("status = 'new' ").silver_genres.select(explode("Movies.genres").alias("genres"),"Movies")
+
+# COMMAND ----------
+
+def read_batch_delta(deltaPath: str) -> DataFrame:
+    return spark.read.format("delta").load(deltaPath)
 
 # COMMAND ----------
 
@@ -113,6 +123,27 @@ def update_bronze_table_status(
 
 # COMMAND ----------
 
+def update_bronze_originallanguage_status(
+    spark: SparkSession, bronzeTablePath: str, dataframe: DataFrame, status: str
+) -> bool:
+
+    bronzeTable = DeltaTable.forPath(spark, f"{bronze_folder_path}/originallanguage")
+    dataframeAugmented = dataframe.withColumn("status", lit(status))
+
+    update_match = "o_bronze.Movies = dataframe.Movies"
+    update = {"status": "dataframe.status"}
+
+    (
+        bronzeTable.alias("o_bronze")
+        .merge(dataframeAugmented.alias("dataframe"), update_match)
+        .whenMatchedUpdate(set=update)
+        .execute()
+    )
+
+    return True
+
+# COMMAND ----------
+
 def transform_originallanguages_bronze(bronze: DataFrame) -> DataFrame:
     
     silver_originallanguages = spark.read.table("OriginalLanguages_bronze").filter("status = 'new' ")
@@ -131,4 +162,19 @@ def transform_originallanguages_bronze(bronze: DataFrame) -> DataFrame:
 
 # COMMAND ----------
 
+def transform_genres_bronze(bronze: DataFrame) -> DataFrame:
+    
+    silver_genres = spark.read.table("genres_bronze").filter("status = 'new' ")
+    silver_genres = silver_genres.select(explode("Movies.genres").alias("genres"),"Movies")
+    silver_genres = silver_genres.select("genres.id","genres.name","movies")
+    
+    
+    silver_genres = silver_genres.select(
+        col("id").cast("integer").alias("genre_id"),
+        col("name").alias("genre_name"),
+        col("Movies")
+    )
+    
+    silver_genres = silver_genres.drop_duplicates("genre_id").dropna()#bug
 
+    return silver_genres

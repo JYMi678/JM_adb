@@ -8,7 +8,7 @@
 
 # COMMAND ----------
 
-# MAGIC  %run "./includes/utilities"
+# MAGIC  %run "./includes/common_functions"
 
 # COMMAND ----------
 
@@ -76,7 +76,7 @@ silver_originallanguages.count()
 
 # COMMAND ----------
 
-silver_originallanguages = silver_originallanguages.drop_duplicates()
+silver_originallanguages = silver_originallanguages.dropDuplicates()
 
 # COMMAND ----------
 
@@ -99,7 +99,7 @@ bronzeToSilverWriter.save(f"{silver_folder_path}/originallanguages")
 
 #
 delta_originallanguages = read_batch_delta(f"{silver_folder_path}/originallanguages")
-delta_originallanguages = delta_originallanguages.drop_duplicates()
+delta_originallanguages = delta_originallanguages.dropDuplicates()
 display(delta_originallanguages)
 
 # COMMAND ----------
