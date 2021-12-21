@@ -56,8 +56,9 @@ def read_movies_bronze() -> DataFrame:
 
 # COMMAND ----------
 
+# no need in bronze_to_silver
 def read_genres_bronze() -> DataFrame:
-    return spark.read.load(f"{bronze_folder_path}/genres").filter("status = 'new' ").silver_genres.select(explode("Movies.genres").alias("genres"),"Movies")
+    return spark.read.load(f"{bronze_folder_path}/").filter("status = 'new' ").silver_genres.select(explode("Movies.genres").alias("genres"),"Movies")
 
 # COMMAND ----------
 
@@ -68,7 +69,7 @@ def read_batch_delta(deltaPath: str) -> DataFrame:
 
 def transform_movies_bronze(bronze: DataFrame, quarantine: bool = False) -> DataFrame:
     
-    silver_movies = bronze.select("Movies.Id","Movies.Title", "Movies.Overview", "Movies.Budget", "Movies.RunTime", "Movies")
+    silver_movies = bronze.select("Movies.Id","Movies.Title", "Movies.Overview", "Movies.Tagline", "Movies.Budget","Movies.Revenue","Movies.ImdbUrl","Movies.TmdbUrl","Movies.PosterUrl","Movies.BackdropUrl","Movies.OriginalLanguage","Movies.ReleaseDate","Movies.RunTime", "Movies.Price", "Movies.CreatedDate", "Movies.UpdatedDate", "Movies.UpdatedBy", "Movies.CreatedBy", "Movies.genres", "Movies")
     
     silver_movies = silver_movies.withColumn("Budget",when(col("Budget")<=1000000 ,1000000).otherwise(silver_movies.Budget))
     
@@ -77,21 +78,51 @@ def transform_movies_bronze(bronze: DataFrame, quarantine: bool = False) -> Data
     
     if not quarantine:
         silver_movies = silver_movies.select(
-            col("Id").cast("integer").alias("movie_id"),
-            col("Title").alias("title"),
-            col("Overview").alias("overview"),
-            col("Budget").alias("budget"),
+            col("Id").cast("integer").alias("Movie_id"),
+            "Title",
+            "Overview",
+            "Tagline",
+            "Budget",
+            "Revenue",
+            "ImdbUrl",
+            "TmdbUrl",
+            "PosterUrl",
+            "BackdropUrl",
+            "OriginalLanguage",
+            "ReleaseDate",
             col("RunTime").cast("integer").alias("runtime"),
-            col("Movies")
+            "Price",
+            "CreatedDate",
+            "UpdatedDate",
+            "UpdatedBy",
+            "CreatedBy",
+            col("genres.id").cast("integer").alias("genres_id"),
+            col("genres.name").alias("genres_name"),
+            "Movies"
         )
     else:
         silver_movies = silver_movies.select(
-            col("Id").cast("integer").alias("movie_id"),
-            col("Title").alias("title"),
-            col("Overview").alias("overview"),
-            col("Budget").alias("budget"),
+            col("Id").cast("integer").alias("Movie_id"),
+            "Title",
+            "Overview",
+            "Tagline",
+            "Budget",
+            "Revenue",
+            "ImdbUrl",
+            "TmdbUrl",
+            "PosterUrl",
+            "BackdropUrl",
+            "OriginalLanguage",
+            "ReleaseDate",
             abs(col("RunTime")).cast("integer").alias("runtime"),
-            col("Movies")
+            "Price",
+            "CreatedDate",
+            "UpdatedDate",
+            "UpdatedBy",
+            "CreatedBy",
+            col("genres.id").cast("integer").alias("Genres_id"),
+            col("genres.name").alias("Genres_name"),
+            "Movies"
         )
 
     return silver_movies

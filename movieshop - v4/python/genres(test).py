@@ -8,7 +8,7 @@
 
 # COMMAND ----------
 
-# MAGIC  %run "./includes/utilities"
+# MAGIC  %run "./includes/common_functions"
 
 # COMMAND ----------
 
@@ -27,7 +27,7 @@ raw_df = read_batch_raw(raw_folder_path)
 transformed_raw_df = transform_raw(raw_df)
 
 raw_to_bronze = batch_writer( dataframe=transformed_raw_df )
-raw_to_bronze.save(f"{bronze_folder_path}/genres")
+raw_to_bronze.save(f"{bronze_folder_path}/")
 
 
 # COMMAND ----------
@@ -39,7 +39,7 @@ drop table if exists genres_bronze
 spark.sql(f"""
 create table genres_bronze
 using delta 
-location "{bronze_folder_path}/genres"
+location "{bronze_folder_path}/"
 """)
 
 # COMMAND ----------
@@ -77,7 +77,7 @@ silver_genres.count()
 
 # COMMAND ----------
 
-silver_genres = silver_genres.drop_duplicates()
+silver_genres = silver_genres.dropDuplicates()
 
 # COMMAND ----------
 
@@ -98,10 +98,17 @@ bronzeToSilverWriter.save(f"{silver_folder_path}/genres")
 
 # COMMAND ----------
 
-#
+# or maybe I can choose to update delta (why not work?)
 delta_genres = read_batch_delta(f"{silver_folder_path}/genres")
-delta_genres = delta_genres.drop_duplicates().na.drop()
+delta_genres = delta_genres.dropDuplicates().na.drop()
 display(delta_genres)
+
+
+# COMMAND ----------
+
+#
+bronzeToSilverWriter = batch_writer(dataframe=delta_genres)
+bronzeToSilverWriter.save(f"{silver_folder_path}/genres")
 
 # COMMAND ----------
 
@@ -123,20 +130,22 @@ location "{silver_folder_path}/genres"
 
 # COMMAND ----------
 
-from delta.tables import DeltaTable
-
-bronzeTable = DeltaTable.forPath(spark, f"{bronze_folder_path}/genres")
-silverAugmented = (
-    silver_genres_clean
-    .withColumn("status", lit("loaded"))
-)
-
-update_match = "g_bronze.Movies = clean.Movies"
-update = {"status": "clean.status"}
-
-(
-  bronzeTable.alias("g_bronze")
-  .merge(silverAugmented.alias("clean"), update_match)
-  .whenMatchedUpdate(set=update)
-  .execute()
-)
+# MAGIC %md
+# MAGIC #no need
+# MAGIC from delta.tables import DeltaTable
+# MAGIC 
+# MAGIC bronzeTable = DeltaTable.forPath(spark, f"{bronze_folder_path}/genres")
+# MAGIC silverAugmented = (
+# MAGIC     silver_genres_clean
+# MAGIC     .withColumn("status", lit("loaded"))
+# MAGIC )
+# MAGIC 
+# MAGIC update_match = "g_bronze.Movies = clean.Movies"
+# MAGIC update = {"status": "clean.status"}
+# MAGIC 
+# MAGIC (
+# MAGIC   bronzeTable.alias("g_bronze")
+# MAGIC   .merge(silverAugmented.alias("clean"), update_match)
+# MAGIC   .whenMatchedUpdate(set=update)
+# MAGIC   .execute()
+# MAGIC )
