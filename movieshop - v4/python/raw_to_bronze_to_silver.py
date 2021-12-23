@@ -8,9 +8,8 @@
 # COMMAND ----------
 
 dbutils.fs.rm(f"{bronze_folder_path}/movies", recurse=True)
-dbutils.fs.rm(f"{bronze_folder_path}/genres", recurse=True)
-dbutils.fs.rm(f"{bronze_folder_path}/movies_genres", recurse=True)
-dbutils.fs.rm(f"{bronze_folder_path}/originallanguages", recurse=True)
+
+# COMMAND ----------
 
 dbutils.fs.rm(f"{silver_folder_path}/movies", recurse=True)
 dbutils.fs.rm(f"{silver_folder_path}/genres", recurse=True)
@@ -62,16 +61,61 @@ location "{bronze_folder_path}/movies"
 
 # COMMAND ----------
 
-# remember to write after all steps
-
 bronze_movies = read_movies_bronze()
-silver_movies = transform_movies_bronze(bronze_movies)
-
-(silver_movies_clean, silver_movies_quarantine) = generate_clean_and_quarantine_dataframes(silver_movies)
 
 # COMMAND ----------
 
-# check genres part
+# remember to write after all steps
+
+bronze_movies = read_movies_bronze()
+
+silver_movies = transform_movies_bronze(bronze_movies)
+
+temp_df = silver_movies.select("Movie_id","Title","Overview","Budget","Runtime","Movies")
+(silver_movies_clean, silver_movies_quarantine) = generate_clean_and_quarantine_dataframes(temp_df)
+
+
+# COMMAND ----------
+
+#silver_movies = bronze_movies.select("Movies.Id","Movies.Title", "Movies.Overview", "Movies.Tagline", "Movies.Budget","Movies.Revenue","Movies.ImdbUrl","Movies.TmdbUrl","Movies.PosterUrl","Movies.BackdropUrl","Movies.OriginalLanguage","Movies.ReleaseDate","Movies.RunTime", "Movies.Price", "Movies.CreatedDate", "Movies.UpdatedDate", "Movies.UpdatedBy", "Movies.CreatedBy", "Movies.genres", "Movies")
+
+# COMMAND ----------
+
+#silver_movies = silver_movies.select(
+            col("Id").cast("integer").alias("Movie_id"),
+            "Title",
+            "Overview",
+            "Tagline",
+            "Budget",
+            "Revenue",
+            "ImdbUrl",
+            "TmdbUrl",
+            "PosterUrl",
+            "BackdropUrl",
+            "OriginalLanguage",
+            "ReleaseDate",
+            col("RunTime").cast("integer"),
+            "Price",
+            "CreatedDate",
+            "UpdatedDate",
+            "UpdatedBy",
+            "CreatedBy",
+            "genres",
+            "Movies"
+        )
+
+# COMMAND ----------
+
+#silver_movies = silver_movies.withColumn("Budget",when(col("Budget")<=1000000 ,1000000).otherwise(silver_movies.Budget))
+
+# COMMAND ----------
+
+#silver_movies = silver_movies.dropDuplicates()
+
+# COMMAND ----------
+
+#temp_df = silver_movies.select("Movie_id","Title","Overview","Budget","Runtime","Movies")
+#(silver_movies_clean, silver_movies_quarantine) = generate_clean_and_quarantine_dataframes(temp_df)
 
 # COMMAND ----------
 
@@ -81,19 +125,12 @@ silver_movies = transform_movies_bronze(bronze_movies)
 # COMMAND ----------
 
 # get genres silver table. 
-# here I use movies_clean, is that right?
-silver_genres = silver_movies_clean.select(explode("Movies.genres").alias("genres"), "Movies")
-silver_genres = silver_genres.select("genres.Genres_id","genres.Genres_name","Movies") 
-#no need to rename or change type cause I have done when transform to silver_movies
-
+silver_genres = silver_movies.select(explode("Movies.genres").alias("genres"), "Movies")
+silver_genres = silver_genres.select(col("genres.id").cast("integer").alias("genre_id"),col("genres.name").alias("genre_name"),"Movies") 
 
 # COMMAND ----------
 
 silver_genres = silver_genres.dropDuplicates().na.drop()
-
-# COMMAND ----------
-
-# check duplication situation
 
 # COMMAND ----------
 
@@ -102,8 +139,20 @@ silver_genres = silver_genres.dropDuplicates().na.drop()
 
 # COMMAND ----------
 
-movies_df = silver_movies_clean.select("Movie_id", "Movies")
-silver_movies_genres = movies_df.join(silver_genres, silver_genres.Movies == movies_df.Movies).select(movies_df.Movie_id, silver_genres.Genre_id)
+movies_df = silver_movies.select("Movie_id", "Movies")
+silver_movies_genres = movies_df.join(silver_genres, silver_genres.Movies == movies_df.Movies).select(movies_df.Movie_id, silver_genres.genre_id)
+
+# COMMAND ----------
+
+silver_movies_genres.count()
+
+# COMMAND ----------
+
+silver_movies_genres.dropDuplicates()
+
+# COMMAND ----------
+
+silver_movies_genres.count()
 
 # COMMAND ----------
 
@@ -112,7 +161,7 @@ silver_movies_genres = movies_df.join(silver_genres, silver_genres.Movies == mov
 
 # COMMAND ----------
 
-silver_originallanguages = silver_movies_clean.select("Movies.Movies_id","Movies.Title", "Movies.OriginalLanguage","Movies")
+silver_originallanguages = silver_movies.select("Movie_id","Title", "OriginalLanguage","Movies")
 
 # COMMAND ----------
 
@@ -127,19 +176,19 @@ silver_originallanguages = silver_originallanguages.dropDuplicates()
 
 # write clean movies data to silver table 
 moviesToSilverWriter = batch_writer(dataframe=silver_movies_clean, exclude_columns=["Movies"])
-moviesToSilverWriter.save(f"{silver_folder_path}/")
+moviesToSilverWriter.save(f"{silver_folder_path}/movies")
 
 # write genres to silver table
 genresToSilverWriter = batch_writer(dataframe=silver_genres, exclude_columns=["Movies"])
-genresToSilverWriter.save(f"{silver_folder_path}/")
+genresToSilverWriter.save(f"{silver_folder_path}/genres")
 
 # write movies_genres to silver table
 movies_genresToSilverWriter = batch_writer(dataframe=silver_movies_genres, exclude_columns=["Movies"])
-movies_genresToSilverWriter.save(f"{silver_folder_path}/")
+movies_genresToSilverWriter.save(f"{silver_folder_path}/movies_genres")
 
 ## write originallanguages to silver table
 originallanguagesToSilverWriter = batch_writer(dataframe=silver_originallanguages, exclude_columns=["Movies"])
-originallanguagesToSilverWriter.save(f"{silver_folder_path}/")
+originallanguagesToSilverWriter.save(f"{silver_folder_path}/originallanguages")
 
 # COMMAND ----------
 
@@ -153,7 +202,7 @@ spark.sql(
     f"""
 CREATE TABLE movies_silver
 USING DELTA
-LOCATION "{silver_folder_path}/"
+LOCATION "{silver_folder_path}/movies"
 """
 )
 
@@ -171,7 +220,7 @@ drop table if exists genres_silver
 spark.sql(f"""
 create table genres_silver
 using delta 
-location "{silver_folder_path}/"
+location "{silver_folder_path}/genres"
 """)
 
 # COMMAND ----------
@@ -188,7 +237,7 @@ drop table if exists movies_genres_silver
 spark.sql(f"""
 create table movies_genres_silver 
 using delta 
-location "{silver_folder_path}/"
+location "{silver_folder_path}/movies_genres"
 """)
 
 # COMMAND ----------
@@ -205,7 +254,7 @@ drop table if exists originallanguages_silver
 spark.sql(f"""
 create table originallanguages_silver 
 using delta 
-location "{silver_folder_path}/"
+location "{silver_folder_path}/originallanguages"
 """)
 
 # COMMAND ----------
