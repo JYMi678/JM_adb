@@ -11,6 +11,10 @@ dbutils.fs.rm(f"{bronze_folder_path}/movies", recurse=True)
 
 # COMMAND ----------
 
+dbutils.fs.rm(f"{silver_folder_path}/", recurse=True)
+
+# COMMAND ----------
+
 dbutils.fs.rm(f"{silver_folder_path}/movies", recurse=True)
 dbutils.fs.rm(f"{silver_folder_path}/genres", recurse=True)
 dbutils.fs.rm(f"{silver_folder_path}/movies_genres", recurse=True)
@@ -61,10 +65,6 @@ location "{bronze_folder_path}/movies"
 
 # COMMAND ----------
 
-bronze_movies = read_movies_bronze()
-
-# COMMAND ----------
-
 # remember to write after all steps
 
 bronze_movies = read_movies_bronze()
@@ -77,56 +77,14 @@ temp_df = silver_movies.select("Movie_id","Title","Overview","Budget","Runtime",
 
 # COMMAND ----------
 
-#silver_movies = bronze_movies.select("Movies.Id","Movies.Title", "Movies.Overview", "Movies.Tagline", "Movies.Budget","Movies.Revenue","Movies.ImdbUrl","Movies.TmdbUrl","Movies.PosterUrl","Movies.BackdropUrl","Movies.OriginalLanguage","Movies.ReleaseDate","Movies.RunTime", "Movies.Price", "Movies.CreatedDate", "Movies.UpdatedDate", "Movies.UpdatedBy", "Movies.CreatedBy", "Movies.genres", "Movies")
-
-# COMMAND ----------
-
-#silver_movies = silver_movies.select(
-            col("Id").cast("integer").alias("Movie_id"),
-            "Title",
-            "Overview",
-            "Tagline",
-            "Budget",
-            "Revenue",
-            "ImdbUrl",
-            "TmdbUrl",
-            "PosterUrl",
-            "BackdropUrl",
-            "OriginalLanguage",
-            "ReleaseDate",
-            col("RunTime").cast("integer"),
-            "Price",
-            "CreatedDate",
-            "UpdatedDate",
-            "UpdatedBy",
-            "CreatedBy",
-            "genres",
-            "Movies"
-        )
-
-# COMMAND ----------
-
-#silver_movies = silver_movies.withColumn("Budget",when(col("Budget")<=1000000 ,1000000).otherwise(silver_movies.Budget))
-
-# COMMAND ----------
-
-#silver_movies = silver_movies.dropDuplicates()
-
-# COMMAND ----------
-
-#temp_df = silver_movies.select("Movie_id","Title","Overview","Budget","Runtime","Movies")
-#(silver_movies_clean, silver_movies_quarantine) = generate_clean_and_quarantine_dataframes(temp_df)
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC ##### get genres silver table
 
 # COMMAND ----------
 
 # get genres silver table. 
-silver_genres = silver_movies.select(explode("Movies.genres").alias("genres"), "Movies")
-silver_genres = silver_genres.select(col("genres.id").cast("integer").alias("genre_id"),col("genres.name").alias("genre_name"),"Movies") 
+silver_genres = silver_movies.select(explode("Movies.genres").alias("genres"),"Movies")
+silver_genres = silver_genres.select(col("genres.id").cast("integer").alias("Genre_id"),col("genres.name").alias("Genre_name"),"Movies") 
 
 # COMMAND ----------
 
@@ -140,7 +98,11 @@ silver_genres = silver_genres.dropDuplicates().na.drop()
 # COMMAND ----------
 
 movies_df = silver_movies.select("Movie_id", "Movies")
-silver_movies_genres = movies_df.join(silver_genres, silver_genres.Movies == movies_df.Movies).select(movies_df.Movie_id, silver_genres.genre_id)
+silver_movies_genres = movies_df.join(silver_genres, silver_genres.Movies == movies_df.Movies).select(movies_df.Movie_id, silver_genres.Genre_id)
+
+# COMMAND ----------
+
+silver_movies_genres = silver_movies_genres.select("Movie_id","Genre_id")
 
 # COMMAND ----------
 
@@ -157,11 +119,32 @@ silver_movies_genres.count()
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ##### transform genres silver table
+
+# COMMAND ----------
+
+silver_genres = silver_genres.select("Genre_id","Genre_name")
+
+# COMMAND ----------
+
+silver_genres.count()
+
+# COMMAND ----------
+
+silver_genres = silver_genres.dropDuplicates().filter("Genre_name != '' ")
+
+# COMMAND ----------
+
+silver_genres.count()
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ##### get originallanguages silver table
 
 # COMMAND ----------
 
-silver_originallanguages = silver_movies.select("Movie_id","Title", "OriginalLanguage","Movies")
+silver_originallanguages = silver_movies.select("Movie_id","Title", "OriginalLanguage")
 
 # COMMAND ----------
 
@@ -209,7 +192,7 @@ LOCATION "{silver_folder_path}/movies"
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC SELECT * FROM movies_silver order by movie_id
+# MAGIC SELECT * FROM movies_silver order by movie_id 
 
 # COMMAND ----------
 
@@ -243,7 +226,7 @@ location "{silver_folder_path}/movies_genres"
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC select * from movies_genres_silver 
+# MAGIC select * from movies_genres_silver order by Movie_id, Genre_id
 
 # COMMAND ----------
 
@@ -260,7 +243,7 @@ location "{silver_folder_path}/originallanguages"
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC select * from originallanguages_silver 
+# MAGIC select * from originallanguages_silver order by Movie_id
 
 # COMMAND ----------
 
@@ -270,8 +253,8 @@ location "{silver_folder_path}/originallanguages"
 # COMMAND ----------
 
 # not sure 
-update_bronze_movies_status(spark, f"{bronze_folder_path}/", silver_movies_clean, "loaded")
-update_bronze_movies_status(spark, f"{bronze_folder_path}/", silver_movies_quarantine, "quarantined")
+update_bronze_movies_status(spark, f"{bronze_folder_path}/movies", silver_movies_clean, "loaded")
+update_bronze_movies_status(spark, f"{bronze_folder_path}/movies", silver_movies_quarantine, "quarantined")
 
 # COMMAND ----------
 
@@ -286,7 +269,7 @@ bronze_Quarantined_DF = spark.read.table("movies_bronze").filter("status = 'quar
 # COMMAND ----------
 
 # Transform the Quarantined Records
-bronzeQuarTransDF = transform_bronze(bronze_Quarantined_DF, quarantine=True).alias("quarantine")
+bronzeQuarTransDF = transform_movies_bronze(bronze_Quarantined_DF, quarantine=True).alias("quarantine")
 
 # display(bronzeQuarTransDF)
 
@@ -294,6 +277,6 @@ bronzeQuarTransDF = transform_bronze(bronze_Quarantined_DF, quarantine=True).ali
 
 # Write the Repaired (formerly Quarantined) Records to the movies Silver Table
 bronzeToSilverWriter = batch_writer(dataframe=bronzeQuarTransDF, exclude_columns=["Movies"])
-bronzeToSilverWriter.save(f"{silver_folder_path}/")
+bronzeToSilverWriter.save(f"{silver_folder_path}/movies")
 
-update_bronze_table_status(spark, f"{bronze_folder_path}/", bronzeQuarTransDF, "loaded")
+update_bronze_movies_status(spark, f"{bronze_folder_path}/movies", bronzeQuarTransDF, "loaded")

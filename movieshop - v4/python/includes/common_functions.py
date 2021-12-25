@@ -56,12 +56,6 @@ def read_movies_bronze() -> DataFrame:
 
 # COMMAND ----------
 
-# no need in bronze_to_silver
-def read_genres_bronze() -> DataFrame:
-    return spark.read.load(f"{bronze_folder_path}/").filter("status = 'new' ").silver_genres.select(explode("Movies.genres").alias("genres"),"Movies")
-
-# COMMAND ----------
-
 def read_batch_delta(deltaPath: str) -> DataFrame:
     return spark.read.format("delta").load(deltaPath)
 
@@ -90,7 +84,7 @@ def transform_movies_bronze(bronze: DataFrame, quarantine: bool = False) -> Data
             "BackdropUrl",
             "OriginalLanguage",
             "ReleaseDate",
-            col("RunTime").cast("integer"),
+            col("RunTime").cast("integer").alias("Runtime"),
             "Price",
             "CreatedDate",
             "UpdatedDate",
@@ -104,22 +98,8 @@ def transform_movies_bronze(bronze: DataFrame, quarantine: bool = False) -> Data
             col("Id").cast("integer").alias("Movie_id"),
             "Title",
             "Overview",
-            "Tagline",
             "Budget",
-            "Revenue",
-            "ImdbUrl",
-            "TmdbUrl",
-            "PosterUrl",
-            "BackdropUrl",
-            "OriginalLanguage",
-            "ReleaseDate",
-            abs(col("RunTime")).cast("integer"),
-            "Price",
-            "CreatedDate",
-            "UpdatedDate",
-            "UpdatedBy",
-            "CreatedBy",
-            "genres",
+            abs(col("RunTime")).cast("integer").alias("Runtime"),
             "Movies"
         )
 
@@ -131,8 +111,8 @@ def generate_clean_and_quarantine_dataframes(
     dataframe: DataFrame,
 ) -> (DataFrame, DataFrame):
     return (
-        dataframe.filter("runtime >= 0"),
-        dataframe.filter("runtime < 0"),
+        dataframe.filter("Runtime >= 0"),
+        dataframe.filter("Runtime < 0"),
     )
 
 
@@ -156,63 +136,3 @@ def update_bronze_movies_status(
     )
 
     return True
-
-# COMMAND ----------
-
-def update_bronze_originallanguage_status(
-    spark: SparkSession, bronzeTablePath: str, dataframe: DataFrame, status: str
-) -> bool:
-
-    bronzeTable = DeltaTable.forPath(spark, bronzeTablePath)
-    dataframeAugmented = dataframe.withColumn("status", lit(status))
-
-    update_match = "o_bronze.Movies = dataframe.Movies"
-    update = {"status": "dataframe.status"}
-
-    (
-        bronzeTable.alias("o_bronze")
-        .merge(dataframeAugmented.alias("dataframe"), update_match)
-        .whenMatchedUpdate(set=update)
-        .execute()
-    )
-
-    return True
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC def transform_originallanguages_bronze(bronze: DataFrame) -> DataFrame:
-# MAGIC     
-# MAGIC     silver_originallanguages = spark.read.table("OriginalLanguages_bronze").filter("status = 'new' ")
-# MAGIC     silver_originallanguages = silver_originallanguages.select("Movies.Id","Movies.Title", "Movies.OriginalLanguages","Movies")
-# MAGIC     
-# MAGIC     silver_originallanguages = silver_originallanguages.drop_duplicates()
-# MAGIC     
-# MAGIC     silver_originallanguages = silver_originallanguages.select(
-# MAGIC         col("Id").cast("integer").alias("movie_id"),
-# MAGIC         col("Title").alias("title"),
-# MAGIC         col("OriginalLanguages").alias("original_languages"),
-# MAGIC         col("Movies")
-# MAGIC      )
-# MAGIC 
-# MAGIC     return silver_originallanguages
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC def transform_genres_bronze(bronze: DataFrame) -> DataFrame:
-# MAGIC     
-# MAGIC     silver_genres = spark.read.table("genres_bronze").filter("status = 'new' ")
-# MAGIC     silver_genres = silver_genres.select(explode("Movies.genres").alias("genres"),"Movies")
-# MAGIC     silver_genres = silver_genres.select("genres.id","genres.name","movies")
-# MAGIC     
-# MAGIC     
-# MAGIC     silver_genres = silver_genres.select(
-# MAGIC         col("id").cast("integer").alias("genre_id"),
-# MAGIC         col("name").alias("genre_name"),
-# MAGIC         col("Movies")
-# MAGIC     )
-# MAGIC     
-# MAGIC     silver_genres = silver_genres.drop_duplicates("genre_id").dropna()#bug
-# MAGIC 
-# MAGIC     return silver_genres
