@@ -65,7 +65,7 @@ def transform_movies_bronze(bronze: DataFrame, quarantine: bool = False) -> Data
     
     silver_movies = bronze_movies.select("Movies.Id","Movies.Title", "Movies.Overview", "Movies.Tagline", "Movies.Budget","Movies.Revenue","Movies.ImdbUrl","Movies.TmdbUrl","Movies.PosterUrl","Movies.BackdropUrl","Movies.OriginalLanguage","Movies.ReleaseDate","Movies.RunTime", "Movies.Price", "Movies.CreatedDate", "Movies.UpdatedDate", "Movies.UpdatedBy", "Movies.CreatedBy", "Movies.genres", "Movies")
     
-    silver_movies = silver_movies.withColumn("Budget",when(col("Budget")<=1000000 ,1000000).otherwise(silver_movies.Budget))
+    #silver_movies = silver_movies.withColumn("Budget",when(col("Budget")<=1000000 ,1000000).otherwise(silver_movies.Budget))
     
     silver_movies = silver_movies.dropDuplicates()
     
@@ -94,6 +94,7 @@ def transform_movies_bronze(bronze: DataFrame, quarantine: bool = False) -> Data
             "Movies"
         )
     else:
+        silver_movies = silver_movies.withColumn("Budget", lit(1000000.0))
         silver_movies = silver_movies.select(
             col("Id").cast("integer").alias("Movie_id"),
             "Title",
@@ -111,8 +112,8 @@ def generate_clean_and_quarantine_dataframes(
     dataframe: DataFrame,
 ) -> (DataFrame, DataFrame):
     return (
-        dataframe.filter("Runtime >= 0"),
-        dataframe.filter("Runtime < 0"),
+        dataframe.filter(("Runtime >= 0") and ("Budget >= 1000000")),
+        dataframe.filter(("Budget < 1000000") or ("Runtime < 0")),
     )
 
 

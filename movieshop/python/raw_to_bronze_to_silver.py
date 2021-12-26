@@ -77,6 +77,14 @@ temp_df = silver_movies.select("Movie_id","Title","Overview","Budget","Runtime",
 
 # COMMAND ----------
 
+silver_movies_clean.count()
+
+# COMMAND ----------
+
+silver_movies_quarantine.count()
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ##### get genres silver table
 
